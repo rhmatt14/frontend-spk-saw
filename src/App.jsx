@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import Login from './login'; 
+import Login from './Login'; 
 import SAWCalculator from './SAWCalculator'; // Ini file hitung-hitungan SPK lu
 
 function App() {
