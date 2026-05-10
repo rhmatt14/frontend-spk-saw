@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { jsPDF } from "jspdf"; // <-- Gunakan kurung kurawal
-import autoTable from 'jspdf-autotable'; // <-- Ubah cara panggilnya
+import { jsPDF } from "jspdf"; 
+import autoTable from 'jspdf-autotable'; 
 
 const SAWCalculator = () => {
   const [kriteria, setKriteria] = useState([]);
@@ -18,6 +18,7 @@ const SAWCalculator = () => {
     fetchDataDariAPI();
   }, []);
 
+  // 1. GET DATA (Nggak perlu tiket karena publik)
   const fetchDataDariAPI = async () => {
     try {
       const response = await fetch('https://backend-spk-saw.vercel.app/api/data-saw');
@@ -64,8 +65,13 @@ const SAWCalculator = () => {
     setHasil(pemeringkatan.sort((a, b) => b.skor - a.skor));
   };
 
+  // 2. TAMBAH & EDIT DATA (Wajib Bawa Tiket)
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Ambil tiket JWT dari brankas
+    const tiket = localStorage.getItem('token_spk');
+    
     const payload = {
       nama: formData.nama,
       nilai: {
@@ -85,7 +91,10 @@ const SAWCalculator = () => {
     try {
       await fetch(url, {
         method: method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${tiket}` // <-- PAMER TIKET KE SATPAM
+        },
         body: JSON.stringify(payload)
       });
       
@@ -96,10 +105,20 @@ const SAWCalculator = () => {
     }
   };
 
+  // 3. HAPUS DATA (Wajib Bawa Tiket)
   const handleHapus = async (id) => {
     if (!window.confirm("Yakin ingin menghapus supplier ini?")) return;
+    
+    // Ambil tiket JWT dari brankas
+    const tiket = localStorage.getItem('token_spk');
+
     try {
-      await fetch(`https://backend-spk-saw.vercel.app/api/hapus-supplier/${id}`, { method: 'DELETE' });
+      await fetch(`https://backend-spk-saw.vercel.app/api/hapus-supplier/${id}`, { 
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${tiket}` // <-- PAMER TIKET KE SATPAM
+        }
+      });
       fetchDataDariAPI();
     } catch (error) {
       console.error("Gagal menghapus data", error);
@@ -122,12 +141,9 @@ const SAWCalculator = () => {
     setFormData({ nama: '', nilai1: '', nilai2: '', nilai3: '', nilai4: '' });
   };
 
-  // --- FUNGSI BARU: MENCETAK PDF ---
   const cetakPDF = () => {
     try {
       const doc = new jsPDF();
-
-      // Mengatur Kop Surat / Judul
       doc.setFontSize(18);
       doc.setFont("helvetica", "bold");
       doc.text("Laporan Keputusan Pemilihan Supplier", 14, 22);
@@ -137,7 +153,6 @@ const SAWCalculator = () => {
       doc.text("Metode: Simple Additive Weighting (SAW)", 14, 30);
       doc.text(`Dicetak pada: ${new Date().toLocaleDateString('id-ID')} | Waktu: ${new Date().toLocaleTimeString('id-ID')}`, 14, 36);
 
-      // Menyiapkan Data Tabel
       const tableColumn = ["Peringkat", "Nama Supplier", "Skor Akhir (V)", "Status"];
       const tableRows = [];
 
@@ -147,7 +162,6 @@ const SAWCalculator = () => {
         tableRows.push(rowData);
       });
 
-      // Menggambar Tabel di PDF (Cara baru untuk versi terbaru)
       autoTable(doc, {
         head: [tableColumn],
         body: tableRows,
@@ -157,7 +171,6 @@ const SAWCalculator = () => {
         alternateRowStyles: { fillColor: [248, 250, 252] }
       });
 
-      // Menambahkan Kesimpulan di bawah tabel
       const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY : 45;
       doc.setFontSize(12);
       doc.setFont("helvetica", "bold");
@@ -167,11 +180,8 @@ const SAWCalculator = () => {
       doc.setFont("helvetica", "normal");
       const teksKesimpulan = `Berdasarkan proses perhitungan Sistem Pendukung Keputusan menggunakan algoritma SAW, manajemen direkomendasikan untuk menjalin kerja sama dengan ${hasil[0]?.nama} sebagai pilihan utama dengan perolehan skor preferensi tertinggi yaitu ${hasil[0]?.skor}.`;
       
-      // Auto word-wrap agar teks tidak terpotong ke samping
       const splitTeks = doc.splitTextToSize(teksKesimpulan, 180);
       doc.text(splitTeks, 14, finalY + 18);
-
-      // Otomatis download file PDF
       doc.save("Laporan_SPK_SAW.pdf");
       
     } catch (error) {
@@ -184,7 +194,6 @@ const SAWCalculator = () => {
     <div className="p-8 bg-slate-100 min-h-screen font-sans">
       <h1 className="text-3xl font-bold mb-8 text-slate-800">Sistem Pendukung Keputusan (SAW)</h1>
       
-      {/* FORM INPUT */}
       <div className="bg-white p-6 rounded-lg shadow-md mb-8 border-t-4 border-blue-600">
         <h2 className="text-xl font-bold mb-4 text-slate-700">
           {editId ? "✏️ Edit Data Supplier" : "➕ Tambah Supplier Baru"}
@@ -223,7 +232,6 @@ const SAWCalculator = () => {
         </form>
       </div>
 
-      {/* HEADER TABEL & TOMBOL PDF */}
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-bold text-slate-800">Tabel Hasil Perankingan</h2>
         {hasil.length > 0 && (
@@ -233,7 +241,6 @@ const SAWCalculator = () => {
         )}
       </div>
 
-      {/* TABEL HASIL SPK */}
       <div className="bg-white shadow-md rounded-lg overflow-hidden border border-slate-200">
         <table className="min-w-full text-left border-collapse">
           <thead>
@@ -274,7 +281,6 @@ const SAWCalculator = () => {
         </table>
       </div>
 
-      {/* KESIMPULAN OTOMATIS */}
       {hasil.length > 0 && (
         <div className="mt-6 bg-indigo-50 border-l-4 border-indigo-600 p-6 rounded shadow-sm">
           <h3 className="text-lg font-bold text-indigo-900 mb-2">💡 Analisis & Kesimpulan Keputusan</h3>
